@@ -1,0 +1,5 @@
+{
+  "name": "OmniScroll: Smart Swiper Interaction",
+  "description": "A sophisticated scroll interaction demo featuring 5 vertical sections with sticky swipe-card components in sections 2 and 4, utilizing IntersectionObserver and wheel/touch interception for seamless navigation.",
+  "requestFramePermissions": []
+}
