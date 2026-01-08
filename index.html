@@ -3,30 +3,46 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>OmniScroll Experience</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    }
     body {
       font-family: 'Inter', sans-serif;
       margin: 0;
       padding: 0;
-      overflow-x: hidden;
+      overflow: hidden;
+      background-color: #000;
+      touch-action: none; /* We handle touch manually for snapping or use standard snapping container */
+    }
+    #root {
+      height: 100dvh;
     }
     .font-serif {
       font-family: 'Playfair Display', serif;
     }
-    /* Hide scrollbar for Chrome, Safari and Opera */
     .no-scrollbar::-webkit-scrollbar {
       display: none;
     }
-    /* Hide scrollbar for IE, Edge and Firefox */
     .no-scrollbar {
-      -ms-overflow-style: none;  /* IE and Edge */
-      scrollbar-width: none;  /* Firefox */
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .snap-container {
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* Hardware acceleration for smooth mobile transitions */
+    .gpu {
+      transform: translate3d(0,0,0);
+      will-change: transform, opacity;
+      backface-visibility: hidden;
     }
   </style>
 <script type="importmap">
@@ -39,7 +55,7 @@
 }
 </script>
 </head>
-<body class="bg-black text-white selection:bg-indigo-500">
+<body class="bg-black text-white selection:bg-indigo-500 overflow-hidden">
   <div id="root"></div>
 </body>
 </html>

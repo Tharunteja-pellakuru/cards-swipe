@@ -15,64 +15,51 @@ const CardSwiperSection: React.FC<CardSwiperSectionProps> = ({ id, cards, headin
   const sectionRef = useRef<HTMLDivElement>(null);
   const isTransitioningRef = useRef(false);
   const touchStartRef = useRef<number | null>(null);
+  const lastScrollTimeRef = useRef(0);
 
-  // Function to handle index changes with animation lock
-  const moveToIndex = useCallback((newIndex: number) => {
-    if (isTransitioningRef.current) return;
-    
-    isTransitioningRef.current = true;
-    setActiveIndex(newIndex);
-    
-    // Smooth cooldown to prevent accidental skipping
-    setTimeout(() => {
-      isTransitioningRef.current = false;
-    }, 600);
-  }, []);
-
-  // Intersection Observer to detect when the section is in view
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
-        setIsIntersecting(entry.isIntersecting && entry.intersectionRatio >= 0.8);
+        // High threshold for mobile focus
+        setIsIntersecting(entry.isIntersecting && entry.intersectionRatio > 0.8);
       },
-      {
-        threshold: [0, 0.5, 0.8, 1.0],
-      }
+      { threshold: [0, 0.5, 0.8, 1.0] }
     );
 
     if (sectionRef.current) {
       observer.observe(sectionRef.current);
     }
-
     return () => observer.disconnect();
   }, []);
 
-  // Scroll Interception Logic
+  const moveToIndex = useCallback((newIndex: number) => {
+    if (isTransitioningRef.current) return;
+    isTransitioningRef.current = true;
+    setActiveIndex(newIndex);
+    setTimeout(() => {
+      isTransitioningRef.current = false;
+    }, 700); // Faster transition for mobile responsiveness
+  }, []);
+
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       if (!isIntersecting) return;
-
       const delta = e.deltaY;
-      
-      // Case 1: At the very first card and scrolling UP
-      if (activeIndex === 0 && delta < 0) {
-        // Allow natural scroll up (no preventDefault)
-        return;
-      }
+      const direction = delta > 0 ? 'down' : 'up';
+      const now = Date.now();
 
-      // Case 2: At the very last card and scrolling DOWN
-      if (activeIndex === cards.length - 1 && delta > 0) {
-        // Allow natural scroll down (no preventDefault)
-        return;
-      }
+      if (now - lastScrollTimeRef.current < 60) return;
 
-      // Case 3: Inside the sequence, lock scroll and switch cards
+      // Direct boundary scroll
+      if (activeIndex === 0 && direction === 'up') return;
+      if (activeIndex === cards.length - 1 && direction === 'down') return;
+
       e.preventDefault();
-      
-      if (Math.abs(delta) > 10) { // Filter out micro-scrolls
-        if (delta > 0 && activeIndex < cards.length - 1) {
+      if (Math.abs(delta) > 25 && !isTransitioningRef.current) {
+        lastScrollTimeRef.current = now;
+        if (direction === 'down' && activeIndex < cards.length - 1) {
           moveToIndex(activeIndex + 1);
-        } else if (delta < 0 && activeIndex > 0) {
+        } else if (direction === 'up' && activeIndex > 0) {
           moveToIndex(activeIndex - 1);
         }
       }
@@ -84,35 +71,29 @@ const CardSwiperSection: React.FC<CardSwiperSectionProps> = ({ id, cards, headin
 
     const handleTouchMove = (e: TouchEvent) => {
       if (!isIntersecting || touchStartRef.current === null) return;
+      const delta = touchStartRef.current - e.touches[0].clientY;
+      const direction = delta > 0 ? 'down' : 'up';
 
-      const touchEnd = e.touches[0].clientY;
-      const delta = touchStartRef.current - touchEnd;
+      // If we are at the edge, allow the standard scroll to handle snapping
+      if (activeIndex === 0 && direction === 'up') return;
+      if (activeIndex === cards.length - 1 && direction === 'down') return;
 
-      // Case 1: First card, swiping DOWN (scroll UP)
-      if (activeIndex === 0 && delta < -10) {
-        return;
-      }
-
-      // Case 2: Last card, swiping UP (scroll DOWN)
-      if (activeIndex === cards.length - 1 && delta > 10) {
-        return;
-      }
-
-      // Intercept touch for card navigation
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
     };
 
     const handleTouchEnd = (e: TouchEvent) => {
       if (!isIntersecting || touchStartRef.current === null) return;
+      const delta = touchStartRef.current - e.changedTouches[0].clientY;
+      const direction = delta > 0 ? 'down' : 'up';
 
-      const touchEnd = e.changedTouches[0].clientY;
-      const delta = touchStartRef.current - touchEnd;
-
-      if (Math.abs(delta) > 50) { // Threshold for swipe
-        if (delta > 0 && activeIndex < cards.length - 1) {
-          moveToIndex(activeIndex + 1);
-        } else if (delta < 0 && activeIndex > 0) {
-          moveToIndex(activeIndex - 1);
+      // Threshold for swipe: 40px
+      if (Math.abs(delta) > 40 && !isTransitioningRef.current) {
+        if (!(activeIndex === 0 && direction === 'up') && !(activeIndex === cards.length - 1 && direction === 'down')) {
+          if (direction === 'down' && activeIndex < cards.length - 1) {
+            moveToIndex(activeIndex + 1);
+          } else if (direction === 'up' && activeIndex > 0) {
+            moveToIndex(activeIndex - 1);
+          }
         }
       }
       touchStartRef.current = null;
@@ -132,74 +113,85 @@ const CardSwiperSection: React.FC<CardSwiperSectionProps> = ({ id, cards, headin
   }, [activeIndex, isIntersecting, cards.length, moveToIndex]);
 
   return (
-    <div 
+    <section 
       id={id}
       ref={sectionRef}
-      className="relative h-screen w-full overflow-hidden bg-neutral-900"
+      className="relative h-[100dvh] w-full overflow-hidden bg-neutral-900 snap-start snap-always"
     >
-      {/* Background Cards Layer */}
-      <div className="absolute inset-0 flex items-center justify-center p-6 md:p-20">
-        <div className="relative w-full max-w-6xl h-full flex flex-col md:flex-row items-center gap-12">
+      <div className="absolute inset-0 flex items-center justify-center p-4 md:p-20">
+        <div className="relative w-full max-w-6xl h-full flex flex-col md:flex-row items-center justify-center gap-8 md:gap-20">
           
-          {/* Content side */}
-          <div className="flex-1 z-10 space-y-6">
-            <h3 className="text-indigo-400 font-semibold tracking-widest uppercase text-sm">
-              {subheading}
-            </h3>
-            <h2 className="text-4xl md:text-6xl font-serif leading-tight">
-              {heading}
-            </h2>
-            <div className="h-24 md:h-32 overflow-hidden relative">
+          {/* Content Area - Responsive Stacking */}
+          <div className="w-full md:flex-1 z-10 space-y-4 md:space-y-8 text-center md:text-left">
+            <div className="space-y-2 md:space-y-4">
+              <h3 className="text-indigo-400 font-bold tracking-[0.2em] uppercase text-[10px] md:text-xs">
+                {subheading}
+              </h3>
+              <h2 className="text-3xl md:text-6xl font-serif leading-tight text-white px-4 md:px-0">
+                {heading}
+              </h2>
+            </div>
+            
+            <div className="h-20 md:h-40 overflow-hidden relative">
               {cards.map((card, idx) => (
                 <div 
                   key={card.id}
-                  className={`absolute top-0 transition-all duration-700 ease-in-out ${
+                  className={`absolute top-0 w-full transition-all duration-700 gpu cubic-bezier(0.16, 1, 0.3, 1) ${
                     idx === activeIndex 
                       ? 'translate-y-0 opacity-100' 
-                      : idx < activeIndex ? '-translate-y-full opacity-0' : 'translate-y-full opacity-0'
+                      : idx < activeIndex 
+                        ? '-translate-y-4 opacity-0' 
+                        : 'translate-y-4 opacity-0'
                   }`}
                 >
-                  <p className="text-xl md:text-2xl text-neutral-400 leading-relaxed font-light">
+                  <p className="text-sm md:text-2xl text-neutral-400 leading-relaxed font-light px-6 md:px-0">
                     {card.description}
                   </p>
                 </div>
               ))}
             </div>
             
-            {/* Pagination Indicators */}
-            <div className="flex gap-4 pt-4">
-              {cards.map((_, idx) => (
-                <div 
-                  key={idx}
-                  className={`h-1 transition-all duration-500 rounded-full ${
-                    idx === activeIndex ? 'w-12 bg-indigo-500' : 'w-4 bg-neutral-700'
-                  }`}
-                />
-              ))}
+            <div className="flex items-center justify-center md:justify-start gap-4 pt-2">
+              <div className="flex gap-1.5">
+                {cards.map((_, idx) => (
+                  <div 
+                    key={idx}
+                    className={`h-1 transition-all duration-500 rounded-full ${
+                      idx === activeIndex ? 'w-8 bg-indigo-500' : 'w-2 bg-neutral-800'
+                    }`}
+                  />
+                ))}
+              </div>
+              <span className="text-[10px] font-mono text-neutral-600">
+                {activeIndex + 1} / {cards.length}
+              </span>
             </div>
           </div>
 
-          {/* Visual side */}
-          <div className="flex-1 w-full h-[300px] md:h-full relative overflow-hidden rounded-3xl shadow-2xl">
+          {/* Image Canvas - Responsive Height */}
+          <div className="w-full md:flex-1 h-[40vh] md:h-[70vh] relative overflow-hidden rounded-2xl md:rounded-[2.5rem] shadow-2xl bg-black">
             {cards.map((card, idx) => (
               <div 
                 key={card.id}
-                className={`absolute inset-0 transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                className={`absolute inset-0 transition-all duration-[800ms] gpu cubic-bezier(0.16, 1, 0.3, 1) ${
                   idx === activeIndex 
                     ? 'translate-y-0 opacity-100 scale-100 rotate-0' 
                     : idx < activeIndex 
-                      ? '-translate-y-full opacity-0 scale-110 -rotate-3' 
-                      : 'translate-y-full opacity-0 scale-110 rotate-3'
+                      ? '-translate-y-full opacity-0 scale-110' 
+                      : 'translate-y-full opacity-0 scale-110'
                 }`}
               >
-                <div className={`absolute inset-0 opacity-40 bg-gradient-to-t from-black to-transparent z-10`}></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80 z-10"></div>
                 <img 
                   src={card.imageUrl} 
                   alt={card.title}
                   className="w-full h-full object-cover"
+                  loading="lazy"
                 />
-                <div className="absolute bottom-8 left-8 right-8 z-20">
-                   <h4 className="text-3xl md:text-4xl font-bold">{card.title}</h4>
+                <div className="absolute bottom-6 left-6 right-6 md:bottom-12 md:left-12 md:right-12 z-20">
+                   <h4 className="text-xl md:text-4xl font-bold tracking-tight text-white">
+                    {card.title}
+                   </h4>
                 </div>
               </div>
             ))}
@@ -207,18 +199,18 @@ const CardSwiperSection: React.FC<CardSwiperSectionProps> = ({ id, cards, headin
         </div>
       </div>
 
-      {/* Progress vertical text */}
-      <div className="absolute right-8 top-1/2 -translate-y-1/2 hidden lg:flex flex-col items-center gap-4 text-neutral-600 font-mono text-xs tracking-tighter">
-        <span>01</span>
-        <div className="w-px h-24 bg-neutral-800 relative overflow-hidden">
+      {/* Progress Line - Desktop Only */}
+      <div className="absolute right-12 top-1/2 -translate-y-1/2 hidden xl:flex flex-col items-center gap-8 text-neutral-700 font-mono text-[10px] tracking-[0.3em] uppercase [writing-mode:vertical-lr]">
+        <span>Discovery</span>
+        <div className="w-px h-32 bg-neutral-800 relative">
            <div 
-            className="absolute top-0 left-0 w-full bg-indigo-500 transition-all duration-500" 
+            className="absolute top-0 left-0 w-full bg-indigo-500 transition-all duration-700" 
             style={{ height: `${((activeIndex + 1) / cards.length) * 100}%` }}
            />
         </div>
-        <span>0{cards.length}</span>
+        <span>Focus</span>
       </div>
-    </div>
+    </section>
   );
 };
 
